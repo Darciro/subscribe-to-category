@@ -41,6 +41,11 @@
       return false;
 
     });
+
+    $('.select-all-categories-to-include, .select-all-categories-to-exclude').on('click', function(e){
+      e.preventDefault();
+      $(this).parent().prev('div').find('input:checkbox').trigger('click'); 
+    });
 		
 
 	});

@@ -15,3 +15,22 @@
     content: "\f307";
     top: -1px;
 }
+
+.stc-category-include,
+.stc-category-exclude {
+	max-height: 200px; 
+	overflow-y: scroll; 
+	overflow-x: hidden;
+}
+
+.stc-category-include label,
+.stc-category-exclude label{
+	display: block;
+	margin: 5px 0;
+}
+
+.select-all-categories-to-include,
+.select-all-categories-to-exclude{
+	display: block;
+	text-align: right;
+}
