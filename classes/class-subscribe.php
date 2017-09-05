@@ -78,6 +78,10 @@ if( class_exists( 'STC_Subscribe' ) ) {
       if( isset( $this->settings['resend_option'] ) && $this->settings['resend_option'] == 1 )
         add_action( 'post_submitbox_misc_actions', array( $this, 'resend_post_option' ) );
 
+      // adding checkbox to publish meta box if activated
+      if( isset( $this->settings['exclude_from_send_option'] ) && $this->settings['exclude_from_send_option'] == 1 )
+        add_action( 'post_submitbox_misc_actions', array( $this, 'exclude_from_send_post_option' ) );
+
   	}
 
     /**
@@ -99,10 +103,41 @@ if( class_exists( 'STC_Subscribe' ) ) {
 
       ?>
         <div class="misc-pub-section stc-section">
-          <span class="dashicons dashicons-groups"></span> <label><?php _e('Resend post to subscribers', 'stc_textdomain' ); ?> <input id="stc-resend" type="checkbox" name="stc_resend"></label>
+          <span class="dashicons dashicons-controls-repeat"></span> 
+          <label>
+            <input id="stc-resend" type="checkbox" name="stc_resend"> 
+            <?php _e('Resend post to subscribers', 'stc_textdomain' ); ?>
+          </label>
           <div id="stc-resend-info" style="display:none;">
             <p><i><?php printf( __( 'This post update will be re-sent to subscribers %s', 'stc_textdomain' ), $next_run ); ?></i></p>
           </div>
+        </div>
+      <?php
+    }
+
+    /**
+     * Adding checkbox to publish meta box with an option to exclude post from send
+     *
+     * @since 1.9.0
+     * 
+     */
+    public function exclude_from_send_post_option(){
+      global $post;
+      $stc_status = get_post_meta( $post->ID, '_stc_notifier_status', true );
+
+      // We wont show resend option on a post that hasn´t been sent
+      /*if( $stc_status != 'sent' )
+        return false;*/
+
+      $time_in_seconds_i18n = strtotime( date_i18n( 'Y-m-d H:i:s' ) ) + STC_Settings::get_next_cron_time( 'stc_schedule_email' );
+      $next_run = gmdate( 'Y-m-d H:i:s', $time_in_seconds_i18n ); 
+
+      ?>
+        <div class="misc-pub-section stc-section">
+          <span class="dashicons dashicons-dismiss"></span> 
+          <label>
+            <input id="stc-resend" type="checkbox" name="stc_resend"> <?php _e('Remove post from send', 'stc_textdomain' ); ?>
+          </label>
         </div>
       <?php
     }

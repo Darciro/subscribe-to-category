@@ -46,6 +46,11 @@
       e.preventDefault();
       $(this).parent().prev('div').find('input:checkbox').trigger('click'); 
     });
+
+    $('.select-all-categories-to-export').on('click', function(e){
+      e.preventDefault();
+      $('.export-table').find('input:checkbox').trigger('click'); 
+    });
 		
 
 	});

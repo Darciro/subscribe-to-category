@@ -96,22 +96,30 @@ if( class_exists( 'STC_Settings' ) ) {
       // Set class property
       $this->options = get_option( 'stc_settings' );
       $time_in_seconds_i18n = strtotime( date_i18n( 'Y-m-d H:i:s' ) ) + self::get_next_cron_time( 'stc_schedule_email' );
-      $next_run = gmdate( 'Y-m-d H:i:s', $time_in_seconds_i18n ); 
+      $next_run = gmdate( get_option('date_format') .' '. get_option('time_format'), $time_in_seconds_i18n ); 
+
       ?>
       <div class="wrap">
         <?php screen_icon(); ?>
         <h2><?php _e('Settings for subscribe to category', 'stc_textdomain' ); ?></h2>       
 
 
-        <table class="widefat">
+        <table class="stc-info widefat">
           <tbody>
+            <!-- <tr>
+              <td class="desc">
+                <?php _e( 'Schedule: ', 'stc_textdomain' ); ?><?php _e('E-mail is scheduled to be sent once every hour.', 'stc_textdomain' ); ?>
+              </td>
+            </tr> -->
             <tr>
-              <td class="desc"><strong><?php _e( 'Schedule: ', 'stc_textdomain' ); ?></strong> <?php _e('E-mail is scheduled to be sent once every hour.', 'stc_textdomain' ); ?></td>
-              <td class="desc"></td>
-              <td class="desc textright"><div class="stc-force-run-action"><button type="button" id="stc-force-run" class="button button-primary"><?php _e( 'Click here to run this action right now', 'stc_textdomain' ); ?></button></div></td>
-            </tr>
-            <tr>
-              <td class="desc" colspan="3"><?php printf( __('Next run is going to be <strong>%s</strong> and will include %s posts.', 'stc_textdomain' ), $next_run, '<span id="stc-posts-in-que">' . $this->get_posts_in_que() . '</span>' ); ?></td>
+              <td class="desc" colspan="2">
+                <?php printf( __('Next run is going to be: <strong>%s</strong> and will include <strong>%s posts</strong>.', 'stc_textdomain' ), $next_run, '<span id="stc-posts-in-que">' . $this->get_posts_in_que() . '</span>' ); ?>
+              </td>
+              <td class="textright">
+                <div class="stc-force-run-action">
+                  <button type="button" id="stc-force-run" class="button button-primary"><?php _e( 'Click here to run this action right now', 'stc_textdomain' ); ?></button>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -184,6 +192,14 @@ if( class_exists( 'STC_Settings' ) ) {
      */
     public function register_settings(){        
 
+        // General settings
+        add_settings_section(
+            'general_setting_id', // ID
+            __( 'General settings', 'stc_textdomain' ), // Title
+            '', //array( $this, 'print_section_info' ), // Callback
+            'stc-subscribe-settings' // Page
+        );  
+
         // Email settings
         add_settings_section(
             'setting_email_id', // ID
@@ -191,6 +207,14 @@ if( class_exists( 'STC_Settings' ) ) {
             '', //array( $this, 'print_section_info' ), // Callback
             'stc-subscribe-settings' // Page
         );  
+
+        add_settings_field(
+            'stc_email_from',
+            __( 'Recurrence of sending: ', 'stc_textdomain' ),
+            array( $this, 'stc_cron_time_callback' ), // Callback
+            'stc-subscribe-settings', // Page
+            'general_setting_id' // Section           
+        );
 
         add_settings_field(
             'stc_email_from',
@@ -221,6 +245,14 @@ if( class_exists( 'STC_Settings' ) ) {
             'stc_resend',
             __( 'Resend:', 'stc_textdomain' ),
             array( $this, 'stc_resend_callback' ), // Callback
+            'stc-resend-settings', // Page
+            'setting_resend_id' // Section           
+        );     
+
+        add_settings_field(
+            'stc_exclude_from_send',
+            __( 'Exclude from send:', 'stc_textdomain' ),
+            array( $this, 'stc_exclude_from_send_callback' ), // Callback
             'stc-resend-settings', // Page
             'setting_resend_id' // Section           
         );        
@@ -291,6 +323,17 @@ if( class_exists( 'STC_Settings' ) ) {
     public function input_validate_sanitize( $input ) {
         $output = array();
 
+        if( isset( $input['cron_recurrence'] ) ){
+          $output['cron_recurrence'] = $input['cron_recurrence'];
+          $this->update_cron_recurrence( $input['cron_recurrence'] );
+          // $results = $wpdb->get_results( 'SELECT * FROM wp_options WHERE option_id = 1', OBJECT );
+
+          /*$timestamp = wp_next_scheduled( 'stc_schedule_email' );
+          if( $timestamp == false ){
+            wp_schedule_event( time(), $output['cron_recurrence'], 'stc_schedule_email' );
+          } */
+        }
+
         if( isset( $input['email_from'] ) ){
 
           // sanitize email input
@@ -309,7 +352,11 @@ if( class_exists( 'STC_Settings' ) ) {
 
         if( isset( $input['resend_option'] ) ){
           $output['resend_option'] = $input['resend_option'];
-        }        
+        }
+
+        if( isset( $input['exclude_from_send_option'] ) ){
+          $output['exclude_from_send_option'] = $input['exclude_from_send_option'];
+        }
 
         if( isset( $input['exclude_css'] ) ){
           $output['exclude_css'] = $input['exclude_css'];
@@ -330,6 +377,31 @@ if( class_exists( 'STC_Settings' ) ) {
      */
     public function print_section_info(){
       _e( 'Add your E-mail settings', 'stc_textdomain' );
+    }
+
+    /** 
+     * Get the settings option array and print one of its values
+     *
+     * @since  1.0.0
+     * 
+     */
+    public function stc_cron_time_callback() {
+      $cron_recurrence = get_option( 'cron_recurrence' );
+      ?>
+        <label id="cron_recurrence_hourly">
+          <input type="radio" id="cron_recurrence_hourly" class="regular-text" name="stc_settings[cron_recurrence]" value="hourly" <?php checked( $this->options['cron_recurrence'], 'hourly' ); ?>>
+          Hourly
+        </label><br>
+        <label id="cron_recurrence_twicedaily">
+          <input type="radio" id="cron_recurrence_twicedaily" class="regular-text" name="stc_settings[cron_recurrence]" value="twicedaily" <?php checked( $this->options['cron_recurrence'], 'twicedaily' ); ?>>
+          Twicedaily
+        </label><br>
+        <label id="cron_recurrence_daily">
+          <input type="radio" id="cron_recurrence_daily" class="regular-text" name="stc_settings[cron_recurrence]" value="daily" <?php checked( $this->options['cron_recurrence'], 'daily' ); ?>>
+          Daily
+        </label><br>
+        <p class="description"><?php _e( 'Set recurrence for sending emails.', 'stc_textdomain' ); ?></p>
+        <?php
     }
 
     /** 
@@ -359,7 +431,6 @@ if( class_exists( 'STC_Settings' ) ) {
         <?php
     }
 
-
     /** 
      * Get the settings option array and print one of its values
      *
@@ -377,6 +448,24 @@ if( class_exists( 'STC_Settings' ) ) {
       <p class="description"><?php _e('Gives an option on edit post (in the publish panel) to resend a post on update.', 'stc_textdomain' ); ?></p>
     <?php
     }    
+
+    /** 
+     * Add option to remove post from send
+     *
+     * @since  1.9.0
+     * 
+     */
+    public function stc_exclude_from_send_callback() { 
+      $options['exclude_from_send_option'] = '';
+      
+      if( isset( $this->options['exclude_from_send_option'] ) )
+        $options['exclude_from_send_option'] = $this->options['exclude_from_send_option'];
+      ?>
+
+      <label for="exclude_from_send_option"><input type="checkbox" value="1" id="exclude_from_send_option" name="stc_settings[exclude_from_send_option]" <?php checked( '1', $options['exclude_from_send_option'] ); ?>><?php _e('Enable exclude from send post option', 'stc_textdomain' ); ?></label>
+      <p class="description"><?php _e('Gives an option on edit post (in the publish panel) to exclude post from send.', 'stc_textdomain' ); ?></p>
+    <?php
+    }   
 
     /** 
      * Get the settings option array and print one of its values
@@ -425,10 +514,13 @@ if( class_exists( 'STC_Settings' ) ) {
       ?>
       <h3><?php _e( 'Export to excel', 'stc_textdomain' ); ?></h3>
       <form method="post" action="options-general.php?page=stc-subscribe-settings">
-      <table class="form-table">
+      <table class="form-table export-table">
         <tbody>
           <tr>
-            <th scope="row"><?php _e('Filter by categories', 'stc_textdomain' ); ?></th>
+            <th scope="row">
+              <?php _e('Filter by categories', 'stc_textdomain' ); ?><br>
+              <a href="#" class="select-all-categories-to-export"><small>Select/Deselect all</small></a>
+            </th>
             <td>
               <?php if(! empty( $categories )) : ?>
                 <?php foreach( $categories as $cat ) : ?>
@@ -447,7 +539,6 @@ if( class_exists( 'STC_Settings' ) ) {
       
       <?php
     }
-
 
     /**
      * Export method for excel
@@ -534,6 +625,50 @@ if( class_exists( 'STC_Settings' ) ) {
       $str = preg_replace("/\t/", "\\t", $str ); 
       $str = preg_replace("/\r?\n/", "\\n", $str ); 
     } 
+
+    /**
+     * Update database for cron interval
+     *
+     * @since  1.9.0
+     * 
+     * @param string $interval 
+     */
+    public function update_cron_recurrence( $interval ) {
+      global $wpdb;
+      $options_table = $wpdb->prefix . 'options';
+      $cron_jobs = get_option( 'cron' );
+      if( $interval == 'daily' ){
+        $timestamp_for_cron = 86400;
+      } elseif( $interval == 'twicedaily' ){
+        $timestamp_for_cron = 43200;
+      } else { // hourly
+        $timestamp_for_cron = 3600;
+      }
+
+      $stc_schedule_email_key = '';
+      foreach ($cron_jobs as $key => $arr) {
+        if( key($arr) === 'stc_schedule_email' ){
+          $cron_jobs[$key]['stc_schedule_email'][key(array_values($arr)[0])]['schedule'] = $interval;
+          $cron_jobs[$key]['stc_schedule_email'][key(array_values($arr)[0])]['interval'] = $timestamp_for_cron;
+          $stc_schedule_email_key = $key;
+        }
+      }
+
+      $cron_jobs[ time() + $timestamp_for_cron ] = $cron_jobs[$stc_schedule_email_key];
+      unset($cron_jobs[$stc_schedule_email_key]);
+
+      $update = $wpdb->update(
+        $options_table,
+        array( 
+            'option_value' => serialize($cron_jobs)
+        ),  
+        array( 'option_name' => 'cron' )
+      );
+
+      if( !$update ){
+        error_log($wpdb->last_error, 0);
+      }
+    }
 
   }
 
