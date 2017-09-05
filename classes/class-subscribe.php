@@ -99,8 +99,7 @@ if( class_exists( 'STC_Subscribe' ) ) {
         return false;
 
       $time_in_seconds_i18n = strtotime( date_i18n( 'Y-m-d H:i:s' ) ) + STC_Settings::get_next_cron_time( 'stc_schedule_email' );
-      $next_run = gmdate( 'Y-m-d H:i:s', $time_in_seconds_i18n ); 
-
+      $next_run = gmdate( get_option('date_format') .' '. get_option('time_format'), $time_in_seconds_i18n ); 
       ?>
         <div class="misc-pub-section stc-section">
           <span class="dashicons dashicons-controls-repeat"></span> 
