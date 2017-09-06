@@ -114,15 +114,29 @@ if( class_exists( 'STC_Settings' ) ) {
       $this->options = get_option( 'stc_settings' );
       $time_in_seconds_i18n = strtotime( date_i18n( 'Y-m-d H:i:s' ) ) + self::get_next_cron_time( 'stc_schedule_email' );
       $next_run = gmdate( get_option('date_format') .' '. get_option('time_format'), $time_in_seconds_i18n ); 
-
+      
       ?>
       <div class="wrap">
         <?php screen_icon(); ?>
         <h2><?php _e('Settings for subscribe to category', 'stc_textdomain' ); ?></h2>       
 
+        <?php if( $this->options['developer_mode'] ): ?>
+          <div id="stc-error-settings" class="error settings-error notice is-dismissible"> 
+            <p><strong><?php _e( 'Attention, developer mode is active, no email will be sent.', 'stc_textdomain' ); ?></strong></p>
+            <button type="button" class="notice-dismiss"><span class="screen-reader-text">Dispensar este aviso.</span></button>
+          </div>
+        <?php endif; ?>
 
+        <?php $posts_to_send = $this->list_posts_in_queue(); ?>
         <table class="stc-info widefat">
           <tbody>
+            <?php if( empty( $posts_to_send ) ): ?>
+            <tr>
+              <td class="desc">
+                <?php printf( __('There are no posts in queue to be sent', 'stc_textdomain' ), $next_run, '<span id="stc-posts-in-que">' . $this->get_posts_in_que() . '</span>' ); ?><br>
+              </td>
+            </tr>
+            <?php else: ?>
             <tr>
               <td class="desc">
                 <?php printf( __('Next run is going to be: <strong>%s</strong> and will include <strong>%s posts</strong>.', 'stc_textdomain' ), $next_run, '<span id="stc-posts-in-que">' . $this->get_posts_in_que() . '</span>' ); ?><br>
@@ -136,7 +150,6 @@ if( class_exists( 'STC_Settings' ) ) {
             </tr>
             <tr>
               <td class="desc" colspan="2">
-                <?php $posts_to_send = $this->list_posts_in_queue(); ?>
                 <div class="posts-to-send">
                   <ul>
                     <?php foreach ($posts_to_send as $post) : ?>
@@ -153,6 +166,7 @@ if( class_exists( 'STC_Settings' ) ) {
                 </div>
               </td>
             </tr>
+          <?php endif; ?>
           </tbody>
         </table>
 
@@ -164,6 +178,7 @@ if( class_exists( 'STC_Settings' ) ) {
             do_settings_sections( 'stc-resend-settings' );
             do_settings_sections( 'stc-style-settings' );
             do_settings_sections( 'stc-deactivation-settings' );
+            do_settings_sections( 'stc-developer-settings' );
             submit_button(); 
         ?>
         </form>
@@ -249,7 +264,7 @@ if( class_exists( 'STC_Settings' ) ) {
             __( 'E-mail settings', 'stc_textdomain' ), // Title
             '', //array( $this, 'print_section_info' ), // Callback
             'stc-subscribe-settings' // Page
-        );  
+        ); 
 
         add_settings_field(
             'stc_email_from',
@@ -271,6 +286,25 @@ if( class_exists( 'STC_Settings' ) ) {
             'stc_title',
             __( 'Email subject: ', 'stc_textdomain' ),
             array( $this, 'stc_title_callback' ), // Callback
+            'stc-subscribe-settings', // Page
+            'setting_email_id' // Section           
+        );
+
+        add_settings_field(
+            'stc_email_content_length',
+            __( 'Quantidade de caracteres: ', 'stc_textdomain' ),
+            array( $this, 'stc_email_content_length_callback' ), // Callback
+            'stc-subscribe-settings', // Page
+            'setting_email_id' // Section           
+        );
+
+        /**
+         * @TODO: Definir uma estrutura de personalizacao para os emails disparados
+         */
+        add_settings_field(
+            'stc_email_template',
+            __( 'Email template: ', 'stc_textdomain' ),
+            // array( $this, 'stc_email_template_callback' ), // Callback
             'stc-subscribe-settings', // Page
             'setting_email_id' // Section           
         );
@@ -317,6 +351,22 @@ if( class_exists( 'STC_Settings' ) ) {
             'setting_style_id' // Section           
         );
 
+        // Developer settings
+        add_settings_section(
+            'setting_developer_id', // ID
+            __( 'Developer settings', 'stc_textdomain' ), // Title
+            '', // array( $this, 'develper_section_info' ), // Callback
+            'stc-developer-settings' // Page
+        );  
+
+        add_settings_field(
+            'stc_developer_mode',
+            __( 'Enable developer mode: ', 'stc_textdomain' ),
+            array( $this, 'stc_developer_mode_callback' ), // Callback
+            'stc-developer-settings', // Page
+            'setting_developer_id' // Section           
+        );  
+
 
         // Deactivation settings
         add_settings_section(
@@ -332,8 +382,7 @@ if( class_exists( 'STC_Settings' ) ) {
             array( $this, 'stc_remove_subscribers_callback' ), // Callback
             'stc-deactivation-settings', // Page
             'setting_deactivation_id' // Section           
-        );        
-
+        );    
 
         register_setting(
           'stc_option_group', // Option group
@@ -369,12 +418,6 @@ if( class_exists( 'STC_Settings' ) ) {
         if( isset( $input['cron_recurrence'] ) ){
           $output['cron_recurrence'] = $input['cron_recurrence'];
           $this->update_cron_recurrence( $input['cron_recurrence'] );
-          // $results = $wpdb->get_results( 'SELECT * FROM wp_options WHERE option_id = 1', OBJECT );
-
-          /*$timestamp = wp_next_scheduled( 'stc_schedule_email' );
-          if( $timestamp == false ){
-            wp_schedule_event( time(), $output['cron_recurrence'], 'stc_schedule_email' );
-          } */
         }
 
         if( isset( $input['email_from'] ) ){
@@ -387,6 +430,14 @@ if( class_exists( 'STC_Settings' ) ) {
               add_settings_error( 'setting_email_id', 'invalid-email', __( 'You have entered an invalid email.', 'stc_textdomain' ) );
             }
           }
+        }
+
+        if( isset( $input['email_content_length'] ) ){
+          $output['email_content_length'] = $input['email_content_length'];
+        }
+
+        if( isset( $input['email_template'] ) ){
+          $output['email_template'] = $input['email_template'];
         }
 
         if( isset( $input['title'] ) ){
@@ -407,6 +458,10 @@ if( class_exists( 'STC_Settings' ) ) {
 
         if( isset( $input['deactivation_remove_subscribers'] ) ){
           $output['deactivation_remove_subscribers'] = $input['deactivation_remove_subscribers'];
+        }
+
+        if( isset( $input['developer_mode'] ) ){
+          $output['developer_mode'] = $input['developer_mode'];
         }
 
         return $output;
@@ -433,15 +488,15 @@ if( class_exists( 'STC_Settings' ) ) {
       ?>
         <label id="cron_recurrence_hourly">
           <input type="radio" id="cron_recurrence_hourly" class="regular-text" name="stc_settings[cron_recurrence]" value="hourly" <?php checked( $this->options['cron_recurrence'], 'hourly' ); ?>>
-          Hourly
+          <?php _e( 'Hourly', 'stc_textdomain' ); ?>
         </label><br>
         <label id="cron_recurrence_twicedaily">
           <input type="radio" id="cron_recurrence_twicedaily" class="regular-text" name="stc_settings[cron_recurrence]" value="twicedaily" <?php checked( $this->options['cron_recurrence'], 'twicedaily' ); ?>>
-          Twicedaily
+          <?php _e( 'Twicedaily', 'stc_textdomain' ); ?>
         </label><br>
         <label id="cron_recurrence_daily">
           <input type="radio" id="cron_recurrence_daily" class="regular-text" name="stc_settings[cron_recurrence]" value="daily" <?php checked( $this->options['cron_recurrence'], 'daily' ); ?>>
-          Daily
+          <?php _e( 'Daily', 'stc_textdomain' ); ?>
         </label><br>
         <p class="description"><?php _e( 'Set recurrence for sending emails.', 'stc_textdomain' ); ?></p>
         <?php
@@ -469,7 +524,33 @@ if( class_exists( 'STC_Settings' ) ) {
      */
     public function stc_title_callback() {
       ?>
-        <input type="text" id="email_from" class="regular-text" name="stc_settings[title]" value="<?php echo isset( $this->options['title'] ) ? esc_attr( $this->options['title'] ) : '' ?>" />
+        <input type="text" id="title" class="regular-text" name="stc_settings[title]" value="<?php echo isset( $this->options['title'] ) ? esc_attr( $this->options['title'] ) : '' ?>" />
+        <p class="description"><?php _e( 'Enter e-mail subject for the e-mail notification, leave empty if you wish to use post title as email subject.', 'stc_textdomain' ); ?></p>
+        <?php
+    }
+
+    /** 
+     * Get the settings option array and print one of its values
+     *
+     * @since  1.0.0
+     * 
+     */
+    public function stc_email_content_length_callback() {
+      ?>
+        <input type="number" id="email_content_length" class="regular-text" name="stc_settings[email_content_length]" value="<?php echo isset( $this->options['email_content_length'] ) ? esc_attr( $this->options['email_content_length'] ) : '' ?>" />
+        <p class="description"><?php _e( 'Enter the max length for the content body when sending emails', 'stc_textdomain' ); ?></p>
+        <?php
+    }
+
+    /** 
+     * Get the settings option array and print one of its values
+     *
+     * @since  1.0.0
+     * 
+     */
+    public function stc_email_template_callback() {
+      ?>
+        <textarea id="email_template" name="stc_settings[email_template]" cols="80" rows="10"><?php echo isset( $this->options['email_template'] ) ? esc_attr( $this->options['email_template'] ) : '' ?></textarea>
         <p class="description"><?php _e( 'Enter e-mail subject for the e-mail notification, leave empty if you wish to use post title as email subject.', 'stc_textdomain' ); ?></p>
         <?php
     }
@@ -543,6 +624,24 @@ if( class_exists( 'STC_Settings' ) ) {
       ?>
 
       <label for="deactivation_remove_subscribers"><input type="checkbox" value="1" id="deactivation_remove_subscribers" name="stc_settings[deactivation_remove_subscribers]" <?php checked( '1', $options['deactivation_remove_subscribers'] ); ?>><?php _e('Delete all subscribers on deactivation', 'stc_textdomain' ); ?></label>
+    <?php
+    }  
+
+    /** 
+     * Get the settings option array and print one of its values
+     *
+     * @since  1.0.0
+     * 
+     */
+    public function stc_developer_mode_callback() { 
+      $options['developer_mode'] = '';
+      
+      if( isset( $this->options['developer_mode'] ) )
+        $options['developer_mode'] = $this->options['developer_mode'];
+  
+      ?>
+
+      <label for="developer_mode"><input type="checkbox" value="1" id="developer_mode" name="stc_settings[developer_mode]" <?php checked( '1', $options['developer_mode'] ); ?>><?php _e('Yes', 'stc_textdomain' ); ?></label>
     <?php
     }        
 
