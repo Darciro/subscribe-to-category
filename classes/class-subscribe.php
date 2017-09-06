@@ -124,10 +124,6 @@ if( class_exists( 'STC_Subscribe' ) ) {
       global $post;
       $stc_status = get_post_meta( $post->ID, '_stc_notifier_status', true );
 
-      // We wont show resend option on a post that hasn´t been sent
-      /*if( $stc_status != 'sent' )
-        return false;*/
-
       $time_in_seconds_i18n = strtotime( date_i18n( 'Y-m-d H:i:s' ) ) + STC_Settings::get_next_cron_time( 'stc_schedule_email' );
       $next_run = gmdate( 'Y-m-d H:i:s', $time_in_seconds_i18n ); 
 
@@ -135,7 +131,7 @@ if( class_exists( 'STC_Subscribe' ) ) {
         <div class="misc-pub-section stc-section">
           <span class="dashicons dashicons-dismiss"></span> 
           <label>
-            <input id="stc-resend" type="checkbox" name="stc_resend"> <?php _e('Remove post from send', 'stc_textdomain' ); ?>
+            <input id="stc-resend" type="checkbox" name="stc_block_from_sending" <?php echo ( $stc_status == 'blocked' ) ? 'checked="checked"' : ''; ?>> <?php _e('Remove post from send', 'stc_textdomain' ); ?>
           </label>
         </div>
       <?php
@@ -303,6 +299,12 @@ if( class_exists( 'STC_Subscribe' ) ) {
       }else{
 
         if( isset( $_POST['stc_resend'] ) && $_POST['stc_resend'] == 'on' ) {
+          update_post_meta( $post_id, '_stc_notifier_status', 'outbox' ); // updating post meta
+        }
+
+        if( isset( $_POST['stc_block_from_sending'] ) && $_POST['stc_block_from_sending'] == 'on' ) {
+          update_post_meta( $post_id, '_stc_notifier_status', 'blocked' ); // updating post meta
+        } else {
           update_post_meta( $post_id, '_stc_notifier_status', 'outbox' ); // updating post meta
         }
         
@@ -970,8 +972,19 @@ if( class_exists( 'STC_Subscribe' ) ) {
         'post_type'   => 'post',
         'post_status' => 'publish',
         'numberposts' => -1,
-        'meta_key'    => $meta_key,
-        'meta_value'  => $meta_value
+        'meta_query' => array(
+            'relation' => 'AND',
+            array(
+              'key'     => $meta_key,
+              'value'   => $meta_value,
+              'compare' => '=',
+            ),
+            array(
+              'key'     => $meta_key,
+              'value'   => 'blocked',
+              'compare' => '!=',
+            ),
+          )
       );
 
       $posts = get_posts( $args );

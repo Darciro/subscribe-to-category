@@ -33,6 +33,7 @@ if( class_exists( 'STC_Settings' ) ) {
 
         // Ajax call for sendings emails manually
         add_action( 'wp_ajax_force_run', array( $this, 'force_run' ) );
+        add_action( 'wp_ajax_remove_post_from_sending', array( $this, 'remove_post_from_sending' ) );
 
       }
 
@@ -53,6 +54,22 @@ if( class_exists( 'STC_Settings' ) ) {
       $subscriber->stc_send_email();
 
       _e( 'Scheduled event successfully executed', 'stc_textdomain' );
+
+      die();
+    }
+
+    /**
+     * Ajax call for trigger the function to remove post from sending manually
+     * 
+     * @since  1.9.0
+     * 
+     */
+    public function remove_post_from_sending(){
+      check_ajax_referer( 'ajax_nonce', 'nonce' );
+      
+      if( update_post_meta( $_POST['post_id'], '_stc_notifier_status', 'blocked' ) ){
+        _e( 'Post removed from queue of sending', 'stc_textdomain' );
+      }
 
       die();
     }
@@ -106,18 +123,33 @@ if( class_exists( 'STC_Settings' ) ) {
 
         <table class="stc-info widefat">
           <tbody>
-            <!-- <tr>
-              <td class="desc">
-                <?php _e( 'Schedule: ', 'stc_textdomain' ); ?><?php _e('E-mail is scheduled to be sent once every hour.', 'stc_textdomain' ); ?>
-              </td>
-            </tr> -->
             <tr>
-              <td class="desc" colspan="2">
-                <?php printf( __('Next run is going to be: <strong>%s</strong> and will include <strong>%s posts</strong>.', 'stc_textdomain' ), $next_run, '<span id="stc-posts-in-que">' . $this->get_posts_in_que() . '</span>' ); ?>
+              <td class="desc">
+                <?php printf( __('Next run is going to be: <strong>%s</strong> and will include <strong>%s posts</strong>.', 'stc_textdomain' ), $next_run, '<span id="stc-posts-in-que">' . $this->get_posts_in_que() . '</span>' ); ?><br>
+                <a id="link-posts-to-send" href="#">Click here to view the complete list</a>
               </td>
               <td class="textright">
                 <div class="stc-force-run-action">
                   <button type="button" id="stc-force-run" class="button button-primary"><?php _e( 'Click here to run this action right now', 'stc_textdomain' ); ?></button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="desc" colspan="2">
+                <?php $posts_to_send = $this->list_posts_in_queue(); ?>
+                <div class="posts-to-send">
+                  <ul>
+                    <?php foreach ($posts_to_send as $post) : ?>
+                      <li>
+                        <?php echo $post->post_title; ?>
+                        <div class="stc-row-actions">
+                          <span class="edit"><a href="<?php echo admin_url(); ?>post.php?post=<?php echo $post->ID; ?>&amp;action=edit">Editar</a> | </span>
+                          <span class="trash"><a href="#" class="stc-remove-from-sending" data-post-id="<?php echo $post->ID; ?>">Remover da lista de envio</a> | </span>
+                          <span class="view"><a href="<?php echo get_permalink($post->ID); ?>">Ver</a></span>
+                        </div>
+                      </li>
+                    <?php endforeach; ?>
+                  </ul>
                 </div>
               </td>
             </tr>
@@ -158,8 +190,19 @@ if( class_exists( 'STC_Settings' ) ) {
         'post_type'   => 'post',
         'post_status' => 'publish',
         'numberposts' => -1,
-        'meta_key'    => $meta_key,
-        'meta_value'  => $meta_value
+        'meta_query' => array(
+            'relation' => 'AND',
+            array(
+              'key'     => $meta_key,
+              'value'   => $meta_value,
+              'compare' => '=',
+            ),
+            array(
+              'key'     => $meta_key,
+              'value'   => 'blocked',
+              'compare' => '!=',
+            ),
+          )
       );
 
       $posts = get_posts( $args );
@@ -668,6 +711,43 @@ if( class_exists( 'STC_Settings' ) ) {
       if( !$update ){
         error_log($wpdb->last_error, 0);
       }
+    }
+
+    /**
+     * Get current posts in que to be sent
+     *
+     * @since  1.0.0
+     * 
+     * @return int sum of posts
+     */
+    private function list_posts_in_queue(){
+      
+      // get posts with a post meta value in outbox
+      $meta_key = '_stc_notifier_status';
+      $meta_value = 'outbox';
+
+      $args = array(
+        'post_type'   => 'post',
+        'post_status' => 'publish',
+        'numberposts' => -1,
+        'meta_query' => array(
+            'relation' => 'AND',
+            array(
+              'key'     => $meta_key,
+              'value'   => $meta_value,
+              'compare' => '=',
+            ),
+            array(
+              'key'     => $meta_key,
+              'value'   => 'blocked',
+              'compare' => '!=',
+            ),
+          )
+      );
+
+      $posts = get_posts( $args );
+
+      return $posts;
     }
 
   }
